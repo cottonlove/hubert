@@ -9,9 +9,13 @@ import torchaudio
 from torchaudio.functional import resample
 
 
-def encode_dataset(args):
+def encode_dataset(args): # .wav/.flac(args에서 파일형식 정의) 오디오파일로 discrete/soft units을 만들어서 .npy(numpy)파일로 저장해둔다.
     print(f"Loading hubert checkpoint")
-    hubert = torch.hub.load("bshall/hubert:main", f"hubert_{args.model}").cuda()
+    hubert = torch.hub.load(
+        "bshall/hubert:main",
+        f"hubert_{args.model}",
+        trust_repo=True,
+    ).cuda()
 
     print(f"Encoding dataset at {args.in_dir}")
     for in_path in tqdm(list(args.in_dir.rglob(f"*{args.extension}"))):
@@ -20,7 +24,7 @@ def encode_dataset(args):
         wav = wav.unsqueeze(0).cuda()
 
         with torch.inference_mode():
-            units = hubert.units(wav)
+            units = hubert.units(wav) #discrte units or soft units
 
         out_path = args.out_dir / in_path.relative_to(args.in_dir)
         out_path.parent.mkdir(parents=True, exist_ok=True)

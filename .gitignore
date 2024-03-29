@@ -130,3 +130,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# model file & tensor file for debugging
+*.pt
+
+# model file 
+checkpoints/

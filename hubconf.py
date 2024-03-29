@@ -11,7 +11,7 @@ from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
 from sklearn.cluster import KMeans
 
-from hubert import HubertDiscrete, HubertSoft, HubertSSL
+from hubert import HubertDiscrete, HubertSoft
 
 
 def hubert_discrete(
@@ -35,7 +35,7 @@ def hubert_discrete(
     return hubert
 
 
-def hubert_soft(
+def hubert_SSL(
     pretrained: bool = True,
     progress: bool = True,
 ) -> HubertSSL:
@@ -57,7 +57,7 @@ def hubert_soft(
 
 
 ## YJ MADE
-def hubert_SSL(
+def HubertSoft(
     pretrained: bool = True,
     progress: bool = True,
 ) -> HubertSoft:
@@ -82,7 +82,6 @@ def _kmeans(
     num_clusters: int, pretrained: bool = True, progress: bool = True
 ) -> KMeans:
     kmeans = KMeans(num_clusters)
-
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             URLS[f"kmeans{num_clusters}"], progress=progress
@@ -90,7 +89,6 @@ def _kmeans(
         kmeans.__dict__["n_features_in_"] = checkpoint["n_features_in_"]
         kmeans.__dict__["_n_threads"] = checkpoint["_n_threads"]
         kmeans.__dict__["cluster_centers_"] = checkpoint["cluster_centers_"].numpy()
-        
     return kmeans
 
 

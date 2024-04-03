@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Hubert(nn.Module):
+class Hubert(nn.Module): #HuBERT to extract SSL features
     def __init__(self, num_label_embeddings: int = 100, mask: bool = True):
         super().__init__()
         self._mask = mask
@@ -27,7 +27,7 @@ class Hubert(nn.Module):
         self.proj = nn.Linear(768, 256)
 
         self.masked_spec_embed = nn.Parameter(torch.FloatTensor(768).uniform_())
-        self.label_embedding = nn.Embedding(num_label_embeddings, 256)
+        self.label_embedding = nn.Embedding(num_label_embeddings, 256) #이게 e_i 같은데 => 맞음
 
     def mask(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         mask = None
@@ -39,6 +39,7 @@ class Hubert(nn.Module):
     def encode(
         self, x: torch.Tensor, layer: Optional[int] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        print("layer: ", layer)
         x = self.feature_extractor(x)
         x = self.feature_projection(x.transpose(1, 2))
         x, mask = self.mask(x)
@@ -53,12 +54,12 @@ class Hubert(nn.Module):
             self.label_embedding.weight.unsqueeze(0).unsqueeze(0),
             dim=-1,
         )
-        return logits / 0.1
+        return logits / 0.1 #0.1: tau
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        x, mask = self.encode(x)
-        x = self.proj(x)
-        logits = self.logits(x)
+        x, mask = self.encode(x) # x: HuBERT 7th layer
+        x = self.proj(x) # HuBERT -> linear projection -> x
+        logits = self.logits(x) # logits = sim(S_t, e_i)/Tau
         return logits, mask
 
 
@@ -104,9 +105,9 @@ class HubertDiscrete(Hubert):
         #print("after padding wav shape: ", wav.shape) # torch.Size([1, 1, 84800]) -> torch.Size([1, 1, 84880])
         x, _ = self.encode(wav, layer=7) #layer= 7 ->6
         # print(x)
-        print("hubert units")
+        print("hubert discrete units")
         x = self.kmeans.predict(x.squeeze().cpu().numpy())
-        # print(x)
+        print(x)
         return torch.tensor(x, dtype=torch.long, device=wav.device)
     
 

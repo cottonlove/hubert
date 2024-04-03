@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def cluster(args):
+def cluster(args): #cluster에 대한 것을 .pt로 저장해둔 것
     with open(args.subset) as file:
         subset = [line.strip() for line in file]
 
@@ -18,11 +18,16 @@ def cluster(args):
     features = []
     for path in subset:
         in_path = args.in_dir / path
-        features.append(np.load(in_path.with_suffix(".npy")))
+        features.append(np.load(in_path.with_suffix(".npy"))) #encode.py에서 discrte/soft units으로 뽑아(self.kmeans.predict) .npy 파일에 저장한 것들
     features = np.concatenate(features, axis=0)
 
     logger.info(f"Clustering features of shape: {features.shape}")
-    kmeans = KMeans(n_clusters=args.n_clusters).fit(features)
+    kmeans = KMeans(n_clusters=args.n_clusters).fit(features) #return Fitted estimator.
+    # 근데 이게 cluster를 만들라면, 첨에는 ssl features에서 fit을 시켜야하는데 
+    # encode.py에서는 load하는 모델이 SoftVC에서 fine-tuning한 HuBERT-Soft or HuBERT-Discrete임
+    # 그래서 .npy로 features 불러오러면 그냥 pretrained HuBERT로 ssl features을 얻고 걜 저장한 후 cluster.py를 실행해서 저장해야할 듯?
+    # encode.py에서는 soft unit encoder 학습을 위해 필요한 discrete units을 뽑기 위해 HuBERT-Discrete을 로드함
+    # 내가 새로 cluster fit하고 싶으면 (LibriSpeech)로, 내가 짠 model.py의 HubertSSL로 ssl features 뽑아서 .npy로 저장해두면 될 듯
 
     checkpoint_path = args.checkpoint_dir / f"kmeans_{args.n_clusters}.pt"
     checkpoint_path.parent.mkdir(exist_ok=True, parents=True)

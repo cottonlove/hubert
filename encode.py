@@ -8,9 +8,12 @@ import torch
 import torchaudio
 from torchaudio.functional import resample
 
+## Soft Unit Encoder를 학습시키기 위해 먼저 discrete Units을 뽑는데 사용함
+
 
 def encode_dataset(args): # .wav/.flac(args에서 파일형식 정의) 오디오파일로 discrete/soft units을 만들어서 .npy(numpy)파일로 저장해둔다.
     print(f"Loading hubert checkpoint")
+    # load HuBERT-Soft or HuBERT-Discrete
     hubert = torch.hub.load(
         "bshall/hubert:main",
         f"hubert_{args.model}",

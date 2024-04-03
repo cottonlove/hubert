@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 import torch
-import torch.cuda.amp as amp
+import torch.cuda.amp as amp #mixed precision learning을 위해 torch에서 제공하는 package
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -15,7 +15,7 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
-from hubert.model import Hubert, URLS
+from hubert.model import Hubert, URLS #URLS to load pretrained checkpoints
 from hubert.dataset import AcousticUnitsDataset
 from hubert.utils import Metric, save_checkpoint, load_checkpoint
 
@@ -36,15 +36,15 @@ STEPS = 25000
 LOG_INTERVAL = 5
 VALIDATION_INTERVAL = 1000
 CHECKPOINT_INTERVAL = 5000
-BACKEND = "nccl"
-INIT_METHOD = "tcp://localhost:54321"
+BACKEND = "nccl" #needed for distributed
+INIT_METHOD = "tcp://localhost:54321" #needed for distributed
 
 
 def train(rank, world_size, args):
-    dist.init_process_group(
+    dist.init_process_group( #needed for distributed
         BACKEND,
-        rank=rank,
-        world_size=world_size,
+        rank=rank, #Rank is the unique ID given to a process, so that other processes know how to identify a particular process.
+        world_size=world_size, #wordsize: #processes = #GPUs
         init_method=INIT_METHOD,
     )
 
@@ -55,7 +55,7 @@ def train(rank, world_size, args):
     log_dir = args.checkpoint_dir / "logs"
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    if rank == 0:
+    if rank == 0: #rank0인 GPU일때
         logger.setLevel(logging.INFO)
         handler = logging.FileHandler(log_dir / f"{args.checkpoint_dir.stem}.log")
         handler.setLevel(logging.INFO)
@@ -73,20 +73,20 @@ def train(rank, world_size, args):
     # Initialize models
     ####################################################################################
 
-    hubert = Hubert(mask=args.mask).to(rank)
+    hubert = Hubert(mask=args.mask).to(rank) #GPU에 hubert 선언
 
-    if args.warmstart:
+    if args.warmstart: #whether to initialize from the fairseq HuBERT checkpoint.
         checkpoint = torch.hub.load_state_dict_from_url(
             URLS["hubert-discrete"], map_location={"cuda:0": f"cuda:{rank}"}
         )
         consume_prefix_in_state_dict_if_present(checkpoint["hubert"], "module.")
 
         # don't use warmstart weights for label embeddings and proj layer
-        del checkpoint["hubert"]["label_embedding.weight"]
-        del checkpoint["hubert"]["proj.weight"]
+        del checkpoint["hubert"]["label_embedding.weight"] # e_i
+        del checkpoint["hubert"]["proj.weight"] #linear projection
         del checkpoint["hubert"]["proj.bias"]
 
-        hubert.load_state_dict(checkpoint["hubert"], strict=False)
+        hubert.load_state_dict(checkpoint["hubert"], strict=False) #strict=False 안해주면 저 위에서 del한거때문에 오류생김
 
     hubert = DDP(hubert, device_ids=[rank])
 
@@ -107,14 +107,16 @@ def train(rank, world_size, args):
     # Initialize datasets and dataloaders
     ####################################################################################
 
-    train_dataset = AcousticUnitsDataset(
+    train_dataset = AcousticUnitsDataset( #wav, discret units
         root=args.dataset_dir,
         train=True,
     )
+
     train_sampler = DistributedSampler(train_dataset, drop_last=True)
+
     train_loader = DataLoader(
         train_dataset,
-        collate_fn=train_dataset.collate,
+        collate_fn=train_dataset.collate, #dataset의 collate function 이해하기 #train때만 쓴다. validation 때는 쓰지 않음
         batch_size=BATCH_SIZE,
         sampler=train_sampler,
         num_workers=8,
@@ -192,7 +194,7 @@ def train(rank, world_size, args):
     validation_loss = Metric()
     validation_accuracy = Metric()
 
-    for epoch in range(start_epoch, n_epochs + 1):
+    for epoch in range(start_epoch, n_epochs + 1): #epoch
         train_sampler.set_epoch(epoch)
 
         hubert.train()
@@ -205,8 +207,8 @@ def train(rank, world_size, args):
             epoch_loss.reset()
             epoch_accuracy.reset()
 
-        for wavs, codes in train_loader:
-            global_step += 1
+        for wavs, codes in train_loader: #iteration
+            global_step += 1 #iteration = global_step
             wavs, codes = wavs.to(rank), codes.to(rank)
 
             ############################################################################
@@ -230,7 +232,7 @@ def train(rank, world_size, args):
                     unmasked_loss = F.cross_entropy(logits[~mask], codes[~mask])
                     loss = args.alpha * masked_loss + (1 - args.alpha) * unmasked_loss
                 else:
-                    loss = F.cross_entropy(logits.transpose(1, 2), codes)
+                    loss = F.cross_entropy(logits.transpose(1, 2), codes) #codes: discret units(one-hot vector)
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -415,7 +417,7 @@ def train_hubert(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train HuBERT soft content encoder.")
-    parser.add_argument(
+    parser.add_argument( #wav, discrete_units
         "dataset_dir",
         metavar="dataset-dir",
         help="path to the data directory.",
@@ -428,12 +430,12 @@ if __name__ == "__main__":
         type=Path,
     )
     parser.add_argument(
-        "--resume",
+        "--resume", #재학습
         help="path to the checkpoint to resume from.",
         type=Path,
     )
     parser.add_argument(
-        "--warmstart",
+        "--warmstart", #facebook
         help="whether to initialize from the fairseq HuBERT checkpoint.",
         action="store_true",
     )
@@ -449,11 +451,11 @@ if __name__ == "__main__":
         type=float,
     )
     args = parser.parse_args()
-
-    world_size = torch.cuda.device_count()
+ 
+    world_size = torch.cuda.device_count() #GPU 갯수
     mp.spawn(
         train,
         args=(world_size, args),
-        nprocs=world_size,
+        nprocs=world_size,  #world_size: Total number of processes
         join=True,
     )

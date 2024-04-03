@@ -57,5 +57,5 @@ def load_checkpoint(
         scaler.load_state_dict(checkpoint["scaler"])
     if "optimizer" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer"])
-    step, loss = checkpoint.get("step", 0), checkpoint.get("loss", float("inf"))
+    step, loss = checkpoint.get("step", 0), checkpoint.get("loss", float("inf")) #찾고자하는 key(1st arg)가 없으면 2nd arg값을 value로 해서 추가해주자.
     return step, loss

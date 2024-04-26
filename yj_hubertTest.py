@@ -8,31 +8,17 @@ hubert = torch.hub.load("bshall/hubert:main", "hubert_discrete", trust_repo=True
 그래서 저기 checkpoint 카피하고 hub대신 load로 direct하게 들고옴
 '''
 
-from hubert import HubertDiscrete, HubertSoft,HubertSSL,Hubert
+
+import sys
+sys.path.append('/home/cottonlove/hubert')
+
+from hubert import HubertDiscrete, HubertSoft, HubertSSL, Hubert
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from sklearn.cluster import KMeans
 import numpy as np
 import torch.nn.functional as F
 
-def _kmeans(
-    num_clusters: int, pretrained: bool = True) -> KMeans:
-    kmeans = KMeans(num_clusters)
-    if pretrained:
-        checkpoint = torch.load("/home/cottonlove/hubert/checkpoints/kmeans100-50f36a95.pt")
-        kmeans.__dict__["n_features_in_"] = checkpoint["n_features_in_"]
-        kmeans.__dict__["_n_threads"] = checkpoint["_n_threads"]
-        kmeans.__dict__["cluster_centers_"] = checkpoint["cluster_centers_"].numpy()
-    return kmeans
-
-
-def kmeans100(pretrained: bool = True) -> KMeans:
-    r"""
-    k-means checkpoint for HuBERT-Discrete with 100 clusters.
-    Args:
-        pretrained (bool): load pretrained weights into the model
-        progress (bool): show progress bar when downloading model
-    """
-    return _kmeans(100, pretrained)
+import librosa
 
 '''code for extracting discrete features'''
 # hubert_weight = torch.load('/home/cottonlove/hubert/checkpoints/hubert-discrete-96b248c5.pt')
@@ -75,15 +61,15 @@ def kmeans100(pretrained: bool = True) -> KMeans:
 
 '''code for extracting SSL features from pretrained HuBERT'''
 #checkpoint = torch.load('/home/cottonlove/hubert/checkpoints/hubert-discrete-96b248c5.pt') 
-checkpoint2 = torch.load('/home/cottonlove/hubert/checkpoints/hubert-soft-35d9f29f.pt')
-hubert = Hubert()
-consume_prefix_in_state_dict_if_present(checkpoint2["hubert"], "module.") #To let a non-DDP model load a state dict from a DDP model, consume_prefix_in_state_dict_if_present() needs to be applied to strip the prefix “module.” in the DDP state dict before loading.
-del checkpoint2["hubert"]["label_embedding.weight"]
-del checkpoint2["hubert"]["proj.weight"]
-del checkpoint2["hubert"]["proj.bias"]
-hubert.load_state_dict(checkpoint2["hubert"], strict=False)
-hubert.eval()
-hubert = hubert.cuda() #cuda로 안올려주면 input이랑 모델 weight가 같은 type 아니라고 error 뜬다.
+# checkpoint2 = torch.load('/home/cottonlove/hubert/checkpoints/hubert-soft-35d9f29f.pt')
+# hubert = Hubert()
+# consume_prefix_in_state_dict_if_present(checkpoint2["hubert"], "module.") #To let a non-DDP model load a state dict from a DDP model, consume_prefix_in_state_dict_if_present() needs to be applied to strip the prefix “module.” in the DDP state dict before loading.
+# del checkpoint2["hubert"]["label_embedding.weight"]
+# del checkpoint2["hubert"]["proj.weight"]
+# del checkpoint2["hubert"]["proj.bias"]
+# hubert.load_state_dict(checkpoint2["hubert"], strict=False)
+# hubert.eval()
+# hubert = hubert.cuda() #cuda로 안올려주면 input이랑 모델 weight가 같은 type 아니라고 error 뜬다.
 
 # checkpoint = torch.load('/home/cottonlove/hubert/checkpoints/hubert-discrete-96b248c5.pt') 
 # hubert = HubertSSL()
@@ -98,32 +84,32 @@ hubert = hubert.cuda() #cuda로 안올려주면 input이랑 모델 weight가 같
 # #print("type of hubert: ", hubert)
 
 # # # # Load audio
-source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
-source = torchaudio.functional.resample(source, sr, 16000)
-source = source.unsqueeze(0).cuda()
+# source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
+# source = torchaudio.functional.resample(source, sr, 16000)
+# source = source.unsqueeze(0).cuda()
 
-# # print("source shape: ", source.shape) #source shape:  torch.Size([1, 1, 84800])
-source = F.pad(source, ((400 - 320) // 2, (400 - 320) // 2))
-SSLfeatures = hubert.encode(source,layer=6)[0]
-# SSLfeatures = hubert.SSLfeatures(source)
+# # # print("source shape: ", source.shape) #source shape:  torch.Size([1, 1, 84800])
+# source = F.pad(source, ((400 - 320) // 2, (400 - 320) // 2))
+# SSLfeatures = hubert.encode(source,layer=6)[0]
+# # SSLfeatures = hubert.SSLfeatures(source)
 
-# print("SSLfeatures.shape: ", SSLfeatures)
-# print(SSLfeatures)
-torch.save(SSLfeatures, 'softvc_hubertsoft_SSLfeatures_6.pt')
+# # print("SSLfeatures.shape: ", SSLfeatures)
+# # print(SSLfeatures)
+# torch.save(SSLfeatures, 'softvc_hubertsoft_SSLfeatures_6.pt')
 
 # softvc_hubertsoft_SSLfeatures_6.pt랑 softvc_hubertdiscrete_SSLfeatures_6.pt 비교하기
-softvc_hubertsoft_SSLfeatures_6 = torch.load('softvc_hubertsoft_SSLfeatures_6.pt').to('cuda:0')
-softvc_hubertdiscrete_SSLfeatures_6 = torch.load('softvc_hubertdiscrete_SSLfeatures_6.pt').to('cuda:0')
+# softvc_hubertsoft_SSLfeatures_6 = torch.load('softvc_hubertsoft_SSLfeatures_6.pt').to('cuda:0')
+# softvc_hubertdiscrete_SSLfeatures_6 = torch.load('softvc_hubertdiscrete_SSLfeatures_6.pt').to('cuda:0')
 
-print(torch.eq(softvc_hubertsoft_SSLfeatures_6.squeeze(0),softvc_hubertdiscrete_SSLfeatures_6.squeeze(0))) #false
-# 제곱 오차 계산
-difference = softvc_hubertdiscrete_SSLfeatures_6.squeeze(0) - softvc_hubertsoft_SSLfeatures_6.squeeze(0)
-squared_error = difference ** 2
-# MSE 계산
-mse = torch.mean(squared_error) 
+# print(torch.eq(softvc_hubertsoft_SSLfeatures_6.squeeze(0),softvc_hubertdiscrete_SSLfeatures_6.squeeze(0))) #false
+# # 제곱 오차 계산
+# difference = softvc_hubertdiscrete_SSLfeatures_6.squeeze(0) - softvc_hubertsoft_SSLfeatures_6.squeeze(0)
+# squared_error = difference ** 2
+# # MSE 계산
+# mse = torch.mean(squared_error) 
 
-print("MSE:", mse.item()) #MSE: 0.006193007342517376
-print(torch.allclose(softvc_hubertdiscrete_SSLfeatures_6,softvc_hubertsoft_SSLfeatures_6.squeeze(0),atol=1e-5)) #False
+# print("MSE:", mse.item()) #MSE: 0.006193007342517376
+# print(torch.allclose(softvc_hubertdiscrete_SSLfeatures_6,softvc_hubertsoft_SSLfeatures_6.squeeze(0),atol=1e-5)) #False
 
 # softvc_SSLfeatures_6 = torch.load('softvc_SSLfeatures_6.pt').to('cuda:0')
 # print(softvc_SSLfeatures_6)
@@ -243,27 +229,169 @@ print(torch.allclose(softvc_hubertdiscrete_SSLfeatures_6,softvc_hubertsoft_SSLfe
 
 
 '''output of Soft Unit Encoder'''
-checkpoint2 = torch.load('/home/cottonlove/hubert/checkpoints/hubert-soft-35d9f29f.pt')
-hubert = HubertSoft()
-consume_prefix_in_state_dict_if_present(checkpoint2["hubert"], "module.") #To let a non-DDP model load a state dict from a DDP model, consume_prefix_in_state_dict_if_present() needs to be applied to strip the prefix “module.” in the DDP state dict before loading.
-# del checkpoint2["hubert"]["label_embedding.weight"]
-# del checkpoint2["hubert"]["proj.weight"]
-# del checkpoint2["hubert"]["proj.bias"]
-hubert.load_state_dict(checkpoint2["hubert"], strict=False)
+# checkpoint2 = torch.load('/home/cottonlove/hubert/checkpoints/hubert-soft-35d9f29f.pt')
+# hubert = HubertSoft()
+# consume_prefix_in_state_dict_if_present(checkpoint2["hubert"], "module.") #To let a non-DDP model load a state dict from a DDP model, consume_prefix_in_state_dict_if_present() needs to be applied to strip the prefix “module.” in the DDP state dict before loading.
+# # del checkpoint2["hubert"]["label_embedding.weight"]
+# # del checkpoint2["hubert"]["proj.weight"]
+# # del checkpoint2["hubert"]["proj.bias"]
+# hubert.load_state_dict(checkpoint2["hubert"], strict=False)
+# hubert.eval()
+# hubert = hubert.cuda() #cuda로 안올려주면 input이랑 모델 weight가 같은 type 아니라고 error 뜬다.
+
+# # import torch, torchaudio
+
+# # # Load checkpoint (either hubert_soft or hubert_discrete)
+# # hubert = torch.hub.load("bshall/hubert:main", "hubert_soft", trust_repo=True).cuda()
+
+# # Load audio
+# source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
+# source = torchaudio.functional.resample(source, sr, 16000)
+# source = source.unsqueeze(0).cuda()
+
+# # Extract speech units
+# units = hubert.units(source)
+
+# print(units.shape) #torch.Size([1, 265, 256])
+
+
+#TODO
+
+# load HuBERT Discrete from SoftVC
+
+checkpoint = torch.load('/home/cottonlove/hubert/checkpoints/hubert-discrete-96b248c5.pt')
+# checkpoint2 = torch.load('/home/cottonlove/hubert/checkpoints/hubert-soft-35d9f29f.pt')
+hubert = Hubert()
+consume_prefix_in_state_dict_if_present(checkpoint["hubert"], "module.") #To let a non-DDP model load a state dict from a DDP model, consume_prefix_in_state_dict_if_present() needs to be applied to strip the prefix “module.” in the DDP state dict before loading.
+del checkpoint["hubert"]["label_embedding.weight"]
+del checkpoint["hubert"]["proj.weight"]
+del checkpoint["hubert"]["proj.bias"]
+hubert.load_state_dict(checkpoint["hubert"], strict=False)
 hubert.eval()
 hubert = hubert.cuda() #cuda로 안올려주면 input이랑 모델 weight가 같은 type 아니라고 error 뜬다.
 
-# import torch, torchaudio
 
-# # Load checkpoint (either hubert_soft or hubert_discrete)
-# hubert = torch.hub.load("bshall/hubert:main", "hubert_soft", trust_repo=True).cuda()
+'''F.pad 없이 SSL features (softVC의 hubert, stylebook의 hubert 6th layer) 비교 => 같다!'''
+# # # # # Load audio
+# source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
+# source = torchaudio.functional.resample(source, sr, 16000)
+# source = source.unsqueeze(0).cuda()
 
-# Load audio
-source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
-source = torchaudio.functional.resample(source, sr, 16000)
-source = source.unsqueeze(0).cuda()
+# SSLfeatures = hubert.encode(source,layer=6)[0]
+# print("SSLfeatures.shape: ", SSLfeatures.shape) #torch.Size([1, 264, 768])
+# torch.save(SSLfeatures, 'softvc_hubertdiscrete_SSLfeatures_6.pt') 
 
-# Extract speech units
-units = hubert.units(source)
+# style_ssl_layer6 = torch.load('/home/cottonlove/baseline_code/stylebook/stylebook_layer6_ssl_100_noPad.pt').to('cuda:0')
+# softVC_ssl_layer6 = torch.load('/home/cottonlove/hubert/softvc_hubertdiscrete_SSLfeatures_6.pt').to('cuda:0')
+# print("style_ssl_layer6.shape: ", style_ssl_layer6.shape) # torch.Size([264, 768])
+# print("softVC_ssl_layer6.shape: ", softVC_ssl_layer6.shape) #torch.Size([1, 264, 768])
 
-print(units.shape) #torch.Size([1, 265, 256])
+# print(torch.allclose(style_ssl_layer6,softVC_ssl_layer6, atol=1e-5)) #True
+
+
+'''torchaudio.load랑 librosa.load 비교'''
+# source, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
+# temp = source
+# print(sr) #24000
+# print("temp.shape: ", temp.shape) #torch.Size([1, 127200])
+# print(temp)
+
+# temp2, t = librosa.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav",sr=None)
+# print("temp2.shape: ", temp2.shape) # (116865,)
+# print(t) #22050(sr=None안해주면 defualt) #24000
+# print(temp2)
+# print(temp == temp2) # False
+# print(np.allclose(temp, temp2, atol=1e-5)) #True
+
+'''이거 resamplng 후에는 다르다고 나옴'''
+
+lib_sr, t = librosa.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav",sr=None)
+lib_sr = torch.from_numpy(lib_sr)
+lib_sr = torchaudio.functional.resample(lib_sr, t, 16000)
+
+tor_sr, sr = torchaudio.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav")
+tor_sr = torchaudio.functional.resample(tor_sr, sr, 16000)
+print(lib_sr)
+print(lib_sr.shape)
+print(tor_sr)
+print(tor_sr.shape)
+print(lib_sr == tor_sr)
+
+# print("sig.shape: ", sig.shape) #sig.shape:  torch.Size([84800])
+# sig = sig.unsqueeze(0)
+# sig = sig.unsqueeze(0)
+# print("sig.shape: ", sig.shape) #sig.shape:  torch.Size([1, 1, 84800])
+# sig = sig.to("cuda:0")
+# print(sig == source) #False
+# print(sig)
+# print(source)
+# print(torch.allclose(sig, source, atol=1e-5)) #False... why?
+
+
+'''5초 뽑은 걸로 앞뒤 0.05초 fade in/out 처리 후 SSL features (softVC의 hubert, stylebook의 hubert 6th layer) 비교'''
+
+# VOCAB_SIZE = 100 #200
+# SR = 16000
+# SEG_LEN = 80000
+# FADE_LEN = 800
+
+# sig, _ = librosa.load("/home/cottonlove/baseline_code/DB/LibriTTS/train-clean-100/19/198/19_198_000000_000002.wav", sr=SR)
+# sig = torch.Tensor(sig)
+
+
+# n_seg = len(sig) // SEG_LEN      # Discard the last frame
+# print("n_seg: ", n_seg) # 1
+
+# def apply_fading(sig, fade_len):
+#     fade_in = torch.arange(fade_len, device=sig.device) / fade_len
+#     fade_out = torch.flipud(fade_in)
+
+#     sig[:fade_len] *= fade_in
+#     sig[-fade_len:] *= fade_out
+
+#     return sig
+
+# @torch.no_grad()
+# def extract_mel(sig):
+#     from speechbrain.lobes.models import HifiGAN
+
+#     mel = HifiGAN.mel_spectogram(
+#         sample_rate=16000, hop_length=256, win_length=1024, n_fft=1024,
+#         n_mels=80, f_min=0.0, f_max=8000.0, power=1, normalized=False,
+#         norm="slaney", mel_scale="slaney", compression=True,
+#         audio=sig
+#     ).transpose(-1, -2)
+
+#     return mel
+
+# for n in range(n_seg):
+#     # Audio
+#     seg = sig[n * SEG_LEN:(n + 1) * SEG_LEN] #5초뽑음
+#     print("seg.shape: ", seg.shape)
+#     seg = apply_fading(seg, FADE_LEN) #fading해줌
+
+#     print("after fading seg.shape: ", seg.shape)
+#     # Mel
+#     # mel = extract_mel(seg).cpu()
+#     # print("mel.shape: ", mel.shape) #([313, 80])
+
+#     # # HuBERT VQ
+#     # hubert_vq = extract_hubert_vq(seg, hubert_model)
+#     # print("hubert_vq.shape: ", hubert_vq.shape) #([249, 768])
+
+#     ## SSL features
+#     seg = seg.unsqueeze(0).unsqueeze(0).to("cuda:0")
+#     print("seg.shape: ", seg.shape) #seg.shape:  torch.Size([1, 1, 80000])
+#     SSLfeatures = hubert.encode(seg,layer=6)[0]
+
+#     print("SSLfeatures.shape: ", SSLfeatures.shape) #w/fading: torch.Size([1, 249, 768])
+#     torch.save(SSLfeatures, 'softvc_hubertdiscrete_SSLfeatures_6_fading.pt') 
+
+#     break
+
+# style_ssl_layer6_faindg = torch.load('/home/cottonlove/baseline_code/stylebook/stylebook_layer6_ssl_100_fading.pt').to('cuda:0')
+# softVC_ssl_layer6_fading = torch.load('/home/cottonlove/hubert/softvc_hubertdiscrete_SSLfeatures_6_fading.pt').to('cuda:0')
+# print("style_ssl_layer6_faindg.shape: ", style_ssl_layer6_faindg.shape) # torch.Size([249, 768])
+# print("softVC_ssl_layer6_fading.shape: ", softVC_ssl_layer6_fading.shape) # ([1, 249, 768])
+
+# print(torch.allclose(style_ssl_layer6_faindg,softVC_ssl_layer6_fading, atol=1e-5)) # True

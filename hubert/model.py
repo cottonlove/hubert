@@ -39,12 +39,14 @@ class Hubert(nn.Module): #HuBERT to extract SSL features
     def encode(
         self, x: torch.Tensor, layer: Optional[int] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        print("layer: ", layer)
+        #print("layer: ", layer)
         x = self.feature_extractor(x)
         x = self.feature_projection(x.transpose(1, 2))
         x, mask = self.mask(x)
         x = x + self.positional_embedding(x)
         x = self.dropout(self.norm(x))
+        # print("model.py")
+        # print("layer: ", layer)
         x = self.encoder(x, output_layer=layer) #discrete: 7이고 soft는 None으로 되어있다.
         return x, mask #x: SSL features
 
@@ -81,6 +83,7 @@ class HubertSoft(Hubert):
         """
         wav = F.pad(wav, ((400 - 320) // 2, (400 - 320) // 2))
         x, _ = self.encode(wav)
+        # x, _ = self.encode(wav, layer = 7)
         return self.proj(x)
 
 
@@ -106,8 +109,8 @@ class HubertDiscrete(Hubert):
         x, _ = self.encode(wav, layer=7) #layer= 7 ->6
         # print(x)
         print("hubert discrete units")
-        x = self.kmeans.predict(x.squeeze().cpu().numpy())
-        print(x)
+        x = self.kmeans.predict(x.squeeze().cpu().numpy()) #Index of the cluster each sample belongs to.
+        print("discrete units shape: ",x.shape)
         return torch.tensor(x, dtype=torch.long, device=wav.device)
     
 
